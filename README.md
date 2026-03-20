@@ -125,7 +125,123 @@ clawteam board attach my-team
 
 ## Install
 
-### One-Command (Recommended)
+### Step 1: Prerequisites
+
+ClawTeam requires **Python 3.10+**, **tmux**, and at least one CLI coding agent (OpenClaw, Claude Code, Codex, etc.).
+
+**Check what you already have:**
+
+```bash
+python3 --version   # Need 3.10+
+tmux -V             # Need any version
+openclaw --version  # Or: claude --version / codex --version
+```
+
+**Install missing prerequisites:**
+
+| Tool | macOS | Ubuntu/Debian |
+|------|-------|---------------|
+| Python 3.10+ | `brew install python@3.12` | `sudo apt update && sudo apt install python3 python3-pip` |
+| tmux | `brew install tmux` | `sudo apt install tmux` |
+| OpenClaw | `pip install openclaw` | `pip install openclaw` |
+
+> If using Claude Code or Codex instead of OpenClaw, install those per their own docs. OpenClaw is the default but not strictly required.
+
+### Step 2: Install ClawTeam
+
+```bash
+git clone https://github.com/win4r/ClawTeam-OpenClaw.git
+cd ClawTeam-OpenClaw
+pip install -e .
+```
+
+Or from upstream PyPI (generic version, defaults to `claude` instead of `openclaw`):
+
+```bash
+pip install clawteam
+```
+
+Optional — P2P transport (ZeroMQ):
+
+```bash
+pip install -e ".[p2p]"
+```
+
+### Step 3: Create the `~/bin/clawteam` symlink
+
+Spawned agents run in fresh shells that may not have pip's bin directory in PATH. A symlink in `~/bin` ensures `clawteam` is always reachable:
+
+```bash
+mkdir -p ~/bin
+ln -sf "$(which clawteam)" ~/bin/clawteam
+```
+
+If `which clawteam` returns nothing, find the binary manually:
+
+```bash
+# Common locations:
+# ~/.local/bin/clawteam
+# /opt/homebrew/bin/clawteam
+# /usr/local/bin/clawteam
+# /Library/Frameworks/Python.framework/Versions/3.*/bin/clawteam
+find / -name clawteam -type f 2>/dev/null | head -5
+```
+
+Then ensure `~/bin` is in your PATH — add this to `~/.zshrc` or `~/.bashrc` if it isn't:
+
+```bash
+export PATH="$HOME/bin:$PATH"
+```
+
+### Step 4: Install the OpenClaw skill (OpenClaw users only)
+
+The skill file teaches OpenClaw agents how to use ClawTeam through natural language. Skip this step if you're not using OpenClaw.
+
+```bash
+mkdir -p ~/.openclaw/workspace/skills/clawteam
+cp skills/openclaw/SKILL.md ~/.openclaw/workspace/skills/clawteam/SKILL.md
+```
+
+### Step 5: Configure exec approvals (OpenClaw users only)
+
+Spawned OpenClaw agents need permission to run `clawteam` commands. Without this, agents will block on interactive permission prompts.
+
+```bash
+# Ensure security mode is "allowlist" (not "full")
+python3 -c "
+import json, pathlib
+p = pathlib.Path.home() / '.openclaw' / 'exec-approvals.json'
+if p.exists():
+    d = json.loads(p.read_text())
+    d.setdefault('defaults', {})['security'] = 'allowlist'
+    p.write_text(json.dumps(d, indent=2))
+    print('exec-approvals.json updated: security = allowlist')
+else:
+    print('exec-approvals.json not found — run openclaw once first, then re-run this step')
+"
+
+# Add clawteam to the allowlist
+openclaw approvals allowlist add --agent "*" "*/clawteam"
+```
+
+> If `openclaw approvals` fails, the OpenClaw gateway may not be running. Start it first, then retry.
+
+### Step 6: Verify
+
+```bash
+clawteam --version          # Should print version
+clawteam config health      # Should show all green
+```
+
+If using OpenClaw, also verify the skill is loaded:
+
+```bash
+openclaw skills list | grep clawteam
+```
+
+### Automated installer
+
+Steps 2–6 above are also available as a single script:
 
 ```bash
 git clone https://github.com/win4r/ClawTeam-OpenClaw.git
@@ -133,22 +249,16 @@ cd ClawTeam-OpenClaw
 bash scripts/install-openclaw.sh
 ```
 
-The installer checks prerequisites (Python 3.10+, tmux, OpenClaw), installs ClawTeam, creates the `~/bin/clawteam` symlink, configures exec approvals, installs the OpenClaw skill, and verifies.
+### Troubleshooting
 
-### Manual
-
-```bash
-# From this repo (recommended — includes OpenClaw adaptations)
-git clone https://github.com/win4r/ClawTeam-OpenClaw.git && cd ClawTeam-OpenClaw && pip install -e .
-
-# Or from upstream PyPI (generic, defaults to claude)
-pip install clawteam
-
-# Optional: P2P transport (ZeroMQ)
-pip install -e ".[p2p]"
-```
-
-Requires **Python 3.10+**, **tmux**, and a CLI coding agent. Python dependencies: `typer`, `pydantic`, `rich`.
+| Problem | Cause | Fix |
+|---------|-------|-----|
+| `clawteam: command not found` | pip bin dir not in PATH | Run Step 3 (symlink + PATH) |
+| Spawned agents can't find `clawteam` | Agents run in fresh shells without pip PATH | Verify `~/bin/clawteam` symlink exists and `~/bin` is in PATH |
+| `openclaw approvals` fails | Gateway not running | Start `openclaw gateway` first, then retry Step 5 |
+| `exec-approvals.json not found` | OpenClaw never ran | Run `openclaw` once to generate config, then retry Step 5 |
+| Agents block on permission prompts | Exec approvals security is "full" | Run Step 5 to switch to "allowlist" |
+| `pip install -e .` fails | Missing build deps | Run `pip install hatchling` first |
 
 ---
 
