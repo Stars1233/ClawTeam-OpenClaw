@@ -17,6 +17,7 @@ def build_agent_prompt(
     user: str = "",
     workspace_dir: str = "",
     workspace_branch: str = "",
+    memory_scope: str = "",
 ) -> str:
     """Build agent prompt: identity + task + optional workspace info."""
     lines = [
@@ -38,6 +39,14 @@ def build_agent_prompt(
             f"- Working directory: {workspace_dir}",
             f"- Branch: {workspace_branch}",
             "- This is an isolated git worktree. Your changes do not affect the main branch.",
+        ])
+    if memory_scope:
+        lines.extend([
+            "",
+            "## Shared Memory",
+            f"- Your team shares memory scope `{memory_scope}`.",
+            f"- Use `memory_store` with scope `{memory_scope}` for team-shared knowledge.",
+            f"- Use `memory_recall` to access memories stored by other team members in this scope.",
         ])
     lines.extend([
         "",

@@ -37,6 +37,7 @@ class SubprocessBackend(SpawnBackend):
             "CLAWTEAM_AGENT_TYPE": agent_type,
             "CLAWTEAM_TEAM_NAME": team_name,
             "CLAWTEAM_AGENT_LEADER": "0",
+            "CLAWTEAM_MEMORY_SCOPE": f"custom:team-{team_name}",
         })
         # Propagate user if set
         user = os.environ.get("CLAWTEAM_USER", "")
