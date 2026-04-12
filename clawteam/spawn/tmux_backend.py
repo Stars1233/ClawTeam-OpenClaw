@@ -25,6 +25,7 @@ from clawteam.spawn.command_validation import (
     is_claude_command,
     is_codex_command,
     is_gemini_command,
+    is_hermes_command,
     is_kimi_command,
     is_nanobot_command,
     is_openclaw_command,
@@ -176,7 +177,7 @@ class TmuxBackend(SpawnBackend):
                 final_command.append("--dangerously-skip-permissions")
             elif is_codex_command(normalized_command):
                 final_command.append("--dangerously-bypass-approvals-and-sandbox")
-            elif is_gemini_command(normalized_command) or is_kimi_command(normalized_command) or is_opencode_command(normalized_command):
+            elif is_gemini_command(normalized_command) or is_kimi_command(normalized_command) or is_opencode_command(normalized_command) or is_hermes_command(normalized_command):
                 final_command.append("--yolo")
 
         # Claude Code: pass --model if specified
@@ -209,6 +210,25 @@ class TmuxBackend(SpawnBackend):
                     final_command.extend(["--agent", openclaw_agent])
                 if prompt:
                     final_command.extend(["--message", prompt])
+
+        # Hermes Agent: tag as tool-sourced so clawteam spawns don't pollute the
+        # user's session list, pass prompt via -q. Insert 'chat' subcommand
+        # only when the user's original command is bare `hermes` (don't clobber
+        # user-supplied global options or alternate subcommands).
+        # Check normalized_command, not final_command, since skip_permissions
+        # may have already appended --yolo.
+        # Do NOT pass --continue -- Hermes --continue resumes EXISTING sessions
+        # only; fresh spawns auto-generate a session ID.
+        if is_hermes_command(normalized_command):
+            if len(normalized_command) == 1:
+                # Insert chat at position 1 (before any --yolo already appended).
+                final_command.insert(1, "chat")
+            if "--source" not in final_command:
+                final_command.extend(["--source", "tool"])
+            if model:
+                final_command.extend(["-m", model])
+            if prompt:
+                final_command.extend(["-q", prompt])
 
         if is_kimi_command(normalized_command):
             if cwd and not command_has_workspace_arg(normalized_command):
@@ -300,7 +320,7 @@ class TmuxBackend(SpawnBackend):
                 fallback_delay=cfg.spawn_prompt_delay,
             )
             _inject_prompt_via_buffer(target, agent_name, prompt)
-        elif prompt and not is_codex_command(normalized_command) and not is_openclaw_command(normalized_command) and not is_nanobot_command(normalized_command) and not is_gemini_command(normalized_command) and not is_kimi_command(normalized_command) and not is_qwen_command(normalized_command) and not is_opencode_command(normalized_command):
+        elif prompt and not is_codex_command(normalized_command) and not is_openclaw_command(normalized_command) and not is_hermes_command(normalized_command) and not is_nanobot_command(normalized_command) and not is_gemini_command(normalized_command) and not is_kimi_command(normalized_command) and not is_qwen_command(normalized_command) and not is_opencode_command(normalized_command):
             # Generic command: append prompt via send-keys
             _wait_for_tui_ready(
                 target,

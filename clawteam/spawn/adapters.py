@@ -18,7 +18,7 @@ class PreparedCommand:
 
 
 class NativeCliAdapter:
-    """Adapter for direct CLI runtimes such as claude, codex, gemini, kimi, nanobot, qwen, opencode."""
+    """Adapter for direct CLI runtimes such as claude, codex, gemini, hermes, kimi, nanobot, qwen, opencode."""
 
     def prepare_command(
         self,
@@ -43,10 +43,27 @@ class NativeCliAdapter:
                 is_gemini_command(normalized_command)
                 or is_kimi_command(normalized_command)
                 or is_opencode_command(normalized_command)
+                or is_hermes_command(normalized_command)
             ):
                 final_command.append("--yolo")
 
-        if is_kimi_command(normalized_command):
+        if is_hermes_command(normalized_command):
+            # Hermes: tag as tool-sourced so clawteam spawns don't pollute the
+            # user's session list, pass prompt via -q. Insert 'chat' subcommand
+            # only when the user's original command is bare `hermes` (don't clobber
+            # user-supplied global options or alternate subcommands).
+            # Check normalized_command, not final_command, since skip_permissions
+            # may have already appended --yolo.
+            # Do NOT pass --continue -- Hermes --continue resumes EXISTING sessions
+            # only; fresh spawns auto-generate a session ID.
+            if len(normalized_command) == 1:
+                # Insert chat at position 1 (before any --yolo already appended).
+                final_command.insert(1, "chat")
+            if "--source" not in final_command:
+                final_command.extend(["--source", "tool"])
+            if prompt:
+                final_command.extend(["-q", prompt])
+        elif is_kimi_command(normalized_command):
             if cwd and not command_has_workspace_arg(normalized_command):
                 final_command.extend(["-w", cwd])
             if prompt:
@@ -158,6 +175,11 @@ def is_openclaw_command(command: list[str]) -> bool:
     return command_basename(command) == "openclaw"
 
 
+def is_hermes_command(command: list[str]) -> bool:
+    """Check if the command is a Hermes Agent CLI invocation."""
+    return command_basename(command) == "hermes"
+
+
 def is_interactive_cli(command: list[str]) -> bool:
     """Check if the command is a known interactive AI coding CLI."""
     return (
@@ -169,6 +191,7 @@ def is_interactive_cli(command: list[str]) -> bool:
         or is_qwen_command(command)
         or is_opencode_command(command)
         or is_openclaw_command(command)
+        or is_hermes_command(command)
     )
 
 
